@@ -30,6 +30,7 @@ void Read_Sensors(){
     sampleStoreTS = 0;
     TS = 0;
   }
+  Serial.println("sampleStoreTS: ", sampleStoreTS);
   /////////// VOLTAGE & CURRENT SENSORS /////////////
   VSI = 0.0000;      //Clear Previous Input Voltage 
   VSO = 0.0000;      //Clear Previous Output Voltage  
@@ -43,6 +44,8 @@ void Read_Sensors(){
   }
   voltageInput  = (VSI/avgCountVS)*inVoltageDivRatio; 
   voltageOutput = (VSO/avgCountVS)*outVoltageDivRatio; 
+  Serial.println("voltageInput: ", voltageInput);
+  Serial.println("voltageOutput: ", voltageOutput);
 
   
   //CURRENT SENSOR - Instantenous Averaging   

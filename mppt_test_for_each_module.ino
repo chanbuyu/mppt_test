@@ -6,67 +6,19 @@
 #include <Arduino.h>
 #include <U8g2lib.h>
 #include <EEPROM.h>  //SYSTEM PARAMETER  - EEPROM Library (By: Arduino)
-#ifdef U8X8_HAVE_HW_SPI
-#include <SPI.h>
-#endif
-#ifdef U8X8_HAVE_HW_I2C
+//#include <SPI.h>
 #include <Wire.h>
-#endif
+
 #include <WiFi.h>  //SYSTEM PARAMETER  - WiFi Library (By: Arduino)
-#include <DNSServer.h>
-DNSServer dnsserver;
-#include <ESPAsyncWebServer.h>
-AsyncWebServer server(80);
-//#include <WiFiClient.h>             //SYSTEM PARAMETER  - WiFi Library (By: Arduino)
+
 #include <Adafruit_ADS1X15.h>  //SYSTEM PARAMETER  - ADS1115/ADS1015 ADC Library (By: Adafruit)
-#include <PubSubClient.h>
-#include <ArduinoOTA.h>
-//以下为1306程序
-U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* clock=*/22, /* data=*/21, /* reset=*/U8X8_PIN_NONE);  // ESP32 Thing, pure SW emulated I2C
-TaskHandle_t Core2;                                                                                        //SYSTEM PARAMETER  - Used for the ESP32 dual core operation
 Adafruit_ADS1015 ads;
+
 #include <time.h>
-#include <ArduinoHA.h>
+
+
 #define timezone 8
 #define ADDR 0b0100011    // 0x23
-
-
-//====================================== 位图数组 ===================================================//
-//下面为电压电流等图标//
-//==================================================================================================//
-#define tbv_x 16
-#define tbv_y 16
-static const unsigned char tbv[] U8X8_PROGMEM = { 0xE0, 0x07, 0xF0, 0x0F, 0xF8, 0x1F, 0xFC, 0x3F, 0xCE, 0x73, 0xCF, 0xF3, 0xCF, 0xF3, 0xCF, 0xF3, 0xCF, 0xF3, 0xCF, 0xF3, 0x9F, 0xF9, 0x3E, 0x7C, 0x7C, 0x3E, 0xF8, 0x1F, 0xF0, 0x0F, 0xE0, 0x07 };  //"V"
-#define tbw_x 16
-#define tbw_y 16
-static const unsigned char tbw[] U8X8_PROGMEM = { 0xE0, 0x07, 0xF0, 0x0F, 0xF8, 0x1F, 0xFC, 0x3F, 0xE6, 0x67, 0xE7, 0xE7, 0x67, 0xE6, 0x67, 0xE6, 0x67, 0xE6, 0x67, 0xE6, 0x27, 0xE4, 0x86, 0x61, 0xEC, 0x37, 0xF8, 0x1F, 0xF0, 0x0F, 0xE0, 0x07 };  //"W"
-#define tbi_x 16
-#define tbi_y 16
-static const unsigned char tbi[] U8X8_PROGMEM = { 0xE0, 0x07, 0xF0, 0x0F, 0x18, 0x18, 0x1C, 0x38, 0x7E, 0x7E, 0x7F, 0xFE, 0x7F, 0xFE, 0x7F, 0xFE, 0x7F, 0xFE, 0x7F, 0xFE, 0x7F, 0xFE, 0x7E, 0x7E, 0x1C, 0x38, 0x18, 0x18, 0xF0, 0x0F, 0xE0, 0x07 };  //  "I"
-#define tbd_x 16
-#define tbd_y 16
-static const unsigned char tbd[] U8X8_PROGMEM = { 0xE0, 0x07, 0xF0, 0x0F, 0xF8, 0x1F, 0x1C, 0x3E, 0x9E, 0x7D, 0x9F, 0xFB, 0x9F, 0xF7, 0x9F, 0xF7, 0x9F, 0xF7, 0x9F, 0xF7, 0x9F, 0xFB, 0x9E, 0x7D, 0x1C, 0x3E, 0xF8, 0x1F, 0xF0, 0x0F, 0xE0, 0x07 };  //  "D"
-#define tbwd_x 16
-#define tbwd_y 16
-static const unsigned char tbwd[] U8X8_PROGMEM = { 0x80, 0x01, 0x60, 0x76, 0x20, 0x04, 0xA0, 0x75, 0xA0, 0x05, 0xA0, 0x75, 0xA0, 0x05, 0xA0, 0x05, 0xA0, 0x05, 0xA0, 0x05, 0x90, 0x09, 0xC8, 0x13, 0xC8, 0x13, 0x88, 0x11, 0x10, 0x08, 0xE0, 0x07 };  //  "WD"
-#define tbdc_x 16
-#define tbdc_y 16
-static const unsigned char tbdc[] U8X8_PROGMEM = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01, 0xFE, 0x3F, 0xC2, 0x20, 0xE2, 0xE0, 0xF2, 0xE7, 0x82, 0xE3, 0x82, 0xE1, 0x82, 0x20, 0xFE, 0x3F, 0x40, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00 };  //  "dc"
-#define tbdca_x 16
-#define tbdca_y 16
-static const unsigned char tbdca[] U8X8_PROGMEM = { 0x00, 0x00, 0x80, 0x00, 0xC0, 0x01, 0xE0, 0x03, 0x36, 0x36, 0x1A, 0x2C, 0x1A, 0xEC, 0xFA, 0xEF, 0xFA, 0xEF, 0x1A, 0xEC, 0x1A, 0x2C, 0xDE, 0x3D, 0x18, 0x0C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };  //  "dca"
-#define tbdcrl_x 16
-#define tbdcrl_y 16
-static const unsigned char tbdcrl[] U8X8_PROGMEM = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFE, 0x3F, 0xBA, 0x23, 0xBA, 0xE3, 0xBA, 0xE3, 0xBA, 0xE3, 0xBA, 0xE3, 0xBA, 0x23, 0xFE, 0x3F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };  //  "dcrl"
-#define tbdcw_x 16
-#define tbdcw_y 16
-static const unsigned char tbdcw[] U8X8_PROGMEM = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFE, 0x3F, 0x12, 0x24, 0x92, 0xE4, 0x92, 0xE4, 0x92, 0xE4, 0x62, 0xE3, 0x02, 0x20, 0xFE, 0x3F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };  //  "dcW"
-#define tbdcv_x 16
-#define tbdcv_y 16
-static const unsigned char tbdcv[] U8X8_PROGMEM = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFE, 0x3F, 0x22, 0x22, 0x22, 0xE2, 0x22, 0xE2, 0x22, 0xE2, 0xC2, 0xE1, 0x82, 0x20, 0xFE, 0x3F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };  //  "dcV"
-#define tbxl_x 16
-#define tbxl_y 16
-static const unsigned char tbxl[] U8X8_PROGMEM = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x04, 0x00, 0x04, 0x38, 0x04, 0x30, 0x84, 0x28, 0x44, 0x05, 0x24, 0x02, 0x14, 0x00, 0x04, 0x00, 0xFC, 0x3F, 0x00, 0x00, 0x00, 0x00 };  //  "xl"
 
 //====================================== USER PARAMETERS ===========================================//
 //下面的参数是没有MPPT充电器设置时使用的默认参数 //
@@ -103,40 +55,6 @@ static const unsigned char tbxl[] U8X8_PROGMEM = { 0x00, 0x00, 0x00, 0x00, 0x00,
 #define output_Mode_add           2460         // Charger/PSU Mode Selection (1 = Charger Mode)
 #define backlightSleepMode_add    2461  // 液晶背光睡眠定时器(默认值:0 =没有)
 #define enableMos_add             2462           // OUTMOS Enable (Bool)新增
-
-//========================================= 以下为MQTT、dns、AP模式程序==============================================//
-
-//=====================================================================================================//
-
-int count = 0;            //时间计数
-bool WIFI_Status = true;  //WIFI状态标志位
-long lastMsg = 0;         // 记录上一次发送信息的时长
-
-// Xiaomi_1303
-const char* ssid = "hailuohai";
-const char* password = "12345678";
-const char* mqtt_server = "175.178.105.64";
-const char* mqtt_user = "admin";
-const char* mqtt_pass = "test112211";
-const char* manufacturer = "ArduinoHA.h";
-const char* device_name = "MPPT";
-
-// mqtt home assistant 初始化
-WiFiClient client;
-HADevice device(device_name);
-HAMqtt mqtt(client, device);
-unsigned long lastUpdateAt = 0;
-
-// "myAnalogInput" is unique ID of the sensor. You should define your own ID.
-HABinarySensor sensor_buckEnable("sensor_buckEnable");
-HASensorNumber analogSensor_powerInput("analogSensor_powerInput");
-HASensorNumber analogSensor_powerOutput("analogSensor_powerOutput");
-HASensorNumber analogSensor_PWM("analogSensor_PWM");
-HASensorNumber analogSensor_voltageInput("analogSensor_voltageInput");
-HASensorNumber analogSensor_voltageOutput("analogSensor_voltageOutput");
-HASensorNumber analogSensor_currentInput("analogSensor_currentInput");
-HASensorNumber analogSensor_currentOutput("analogSensor_currentOutput");
-
 
 //====================================== USER PARAMETERS ==========================================//
 //下面的参数是没有MPPT充电器设置时使用的默认参数 //
@@ -317,173 +235,6 @@ unsigned long
   loopTimeEnd           = 0,            //SYSTEM PARAMETER - 用于循环循环秒表，记录循环结束时间
   secondsElapsed        = 0;         //SYSTEM PARAMETER -
 
- String MPPT_Data(void) {
-  const char* fanStatus1 = "";
-  const char* enableMos1 = "";
-  if (fanStatus == 1) {
-    fanStatus1 = "开";
-  } else {
-    fanStatus1 = "关";
-  }
-
-  if (enableMos == 1) {
-    enableMos1 = "开";
-  } else if (enableMos == 0) {
-    enableMos1 = "关";
-  } else if (enableMos == 2) {
-    enableMos1 = "自动";
-  }
-
-  // 数据打包为一个HTML显示代码
-  String dataBuffer = "<p>";
-  dataBuffer += "<h2>运行数据</h2>";
-  dataBuffer += "<b>输入电压: </b>";
-  dataBuffer += String(voltageInput);
-  dataBuffer += "<b>V</b>";
-  dataBuffer += "<br/>";
-  dataBuffer += "<b>输入电流: </b>";
-  dataBuffer += String(currentInput);
-  dataBuffer += "<b>A</b>";
-  dataBuffer += "<br/>";
-  dataBuffer += "<b>电池电压: </b>";
-  dataBuffer += String(voltageOutput);
-  dataBuffer += "<b>V</b>";
-  dataBuffer += "<br/>";
-  dataBuffer += "<b>电池容量: </b>";
-  dataBuffer += String(batteryPercent);
-  dataBuffer += "<b>%</b>";
-  dataBuffer += "<br/>";
-  dataBuffer += "<b>充电电流: </b>";
-  dataBuffer += String(currentOutput);
-  dataBuffer += "<b>A</b>";
-  dataBuffer += "<br/>";
-  dataBuffer += "<b>负载输出电流: </b>";
-  dataBuffer += String(loadcurrentOutput);
-  dataBuffer += "<b>A</b>";
-  dataBuffer += "<br/>";
-  dataBuffer += "<b>BUCK效率: </b>";
-  dataBuffer += String(buckEfficiency);
-  dataBuffer += "<b>%</b>";
-  dataBuffer += "<br/>";
-  dataBuffer += "<b>控制器温度: </b>";
-  dataBuffer += String(temperature);
-  dataBuffer += "<b>℃</b>";
-  dataBuffer += "<br/>";
-  dataBuffer += "<b>风扇状态: </b>";
-  dataBuffer += String(fanStatus1);
-  dataBuffer += "<br/>";
-  dataBuffer += "<b>负载输出状态: </b>";
-  dataBuffer += String(enableMos1);
-  dataBuffer += "<br /></p>";
-  return dataBuffer;  // 最后要将数组返回出去
-}
-
-void Out_Mosfet_sw(AsyncWebServerRequest* request) {
-  String state = request->getParam("outmos")->value();
-  if (state == "on") {
-    Out_MOSFET_Enable();
-  } else if (state == "off") {
-    Out_MOSFET_Disable();
-  } else if (state == "auto") {
-    Out_MOSFET_zt();
-  }
-  request->send(200, "text/plain", "OK");  // 发送接收成功标志符
-  }
-
-//==============================================以下为HTML代码========================================//
-const char index_html[] PROGMEM = R"rawliteral(
-<!DOCTYPE HTML>
-<html>
-<head>
-<meta charset="utf-8">
-<title>ESP32-MPPT控制器管理系统V1.20</title>
-</head>
-<body>
-	<h1>ESP32-MPPT控制器V1.20</h1>
-	<!-- 创建一个ID位mppt的盒子用于显示获取到的数据 -->
-	<div id="mppt"></div>
-	<button onclick="sw()"> 打开 </button>
-  <button onclick="sw1()"> 关闭 </button>
-  <button onclick="sw2()"> 自动 </button>
-  <h3>wifi 密码配置</h3>
-  <div>
-        <label for="name">wifi名称</label>
-        <input type="text" id="wifi" name="car_name" placeholder="ssid">
-        <br>
-        <label for="type">密&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp码</label>
-        <input type="text" id="code" name="car_type" placeholder="password">
-        <br>
-        <button id ="send_WIFI" type="button" onclick="send_wifi()">提交</button>
-  </div>
-</body>
-<script>
-function setpath() {
-    var default_path = document.getElementById("newfile").files[0].name;
-    document.getElementById("filepath").value = default_path;
-}
-
-function send_wifi() {
-    var input_ssid = document.getElementById("wifi").value;
-    var input_code = document.getElementById("code").value;
-    var pw = new XMLHttpRequest();
-        pw.open("POST", "/wifi_data", true);
-        pw.onreadystatechange = function() {
-            if (pw.readyState == 4) {
-                if (pw.status == 200) {
-                    console.log(pw.responseText);
-                } else if (pw.status == 0) {
-                    alert("Server closed the connection abruptly!");
-                    location.reload()
-                } else {
-                    alert(pw.status + " Error!\n" + pw.responseText);
-                    location.reload()
-                }
-            }
-        };
-    var data = {
-        "wifi_name":input_ssid,
-        "wifi_code":input_code
-    }
-        pw.send(JSON.stringify(data));
-}
-
-	// 按下按钮会运行这个JS函数
-	function sw() {
-    var payload = "on"; // 需要发送的内容
-		// 通过get请求给 /sw
-		var xhr = new XMLHttpRequest();
-		xhr.open("GET", "/sw?outmos=" + payload, true);
-		xhr.send();
-	}
-  	function sw1() {
-    var payload = "off"; // 需要发送的内容
-		// 通过get请求给 /sw
-		var xhr = new XMLHttpRequest();
-		xhr.open("GET", "/sw?outmos=" + payload, true);
-		xhr.send();
-	}
-    	function sw2() {
-    var payload = "auto"; // 需要发送的内容
-		// 通过get请求给 /sw
-		var xhr = new XMLHttpRequest();
-		xhr.open("GET", "/sw?outmos=" + payload, true);
-		xhr.send();
-	}
-	// 设置一个定时任务, 1000ms执行一次
-	setInterval(function () {
-		var xhttp = new XMLHttpRequest();
-		xhttp.onreadystatechange = function () {
-			if (this.readyState == 4 && this.status == 200) {
-				// 此代码会搜索ID为mppt的组件，然后使用返回内容替换组件内容
-				document.getElementById("mppt").innerHTML = this.responseText;
-			}
-		};
-		// 使用GET的方式请求 /mppt
-		xhttp.open("GET", "/mppt", true);
-		xhttp.send();
-	}, 1000)
-</script>)rawliteral";
-
 
 //===============================主程序============================================================//
 //下面的代码包含所有翻译的系统进程MPPT固件。他们中的大多数被称为//
@@ -493,13 +244,7 @@ function send_wifi() {
 //未使用通过Arduino ESP32核心。是的它同时多核处理! //
 //=================================================================================================//
 
-//================= CORE0: SETUP (DUAL CORE MODE) =====================//
-void coreTwo(void* pvParameters) {
-    connect_wifi(); //TAB#7 - WiFi Initialization
-while (1) {
-    Wireless_Telemetry();                                   //TAB#7 - Wireless telemetry (WiFi & Bluetooth)
-  }
-}
+
 //================== CORE1: SETUP (DUAL CORE MODE) ====================//
 void setup() {
   //SERIAL INITIALIZATION
@@ -517,63 +262,16 @@ void setup() {
   pinMode(buttonRight, INPUT);
   pinMode(buttonBack, INPUT);
   pinMode(buttonSelect, INPUT);
-  //PWM INITIALIZATION
-  ledcSetup(pwmChannel, pwmFrequency, pwmResolution);  //Set PWM Parameters
-  ledcAttachPin(buck_IN, pwmChannel);                  //Set pin as PWM
-  ledcWrite(pwmChannel, PWM);                          //Write PWM value at startup (duty = 0)
-  pwmMax = pow(2, pwmResolution) - 1;                  //Get PWM Max Bit Ceiling
-  pwmMaxLimited = (PWM_MaxDC * pwmMax) / 100.000;      //Get maximum PWM Duty Cycle (pwm limiting protection)
+  
+  
   //ADC INITIALIZATION
   ADC_SetGain();  //Sets ADC Gain & Range
   ads.begin();    //Initialize ADC
-  //GPIO INITIALIZATION
-  buck_Disable();
-  //ENABLE DUAL CORE MULTITASKING
-  xTaskCreatePinnedToCore(coreTwo, "coreTwo", 10000, NULL, 0, &Core2, 0);
-  //INITIALIZE AND LIOAD FLASH MEMORY DATA
-  EEPROM.begin(eeprom_size);
-  initializeFlashAutoload();  //Load stored settings from flash memory
-  //以下为1306初始化程序
-  if (enableLCD == 1) {
-    u8g2.begin();
-    u8g2.enableUTF8Print();
-    u8g2.setFont(u8g2_font_unifont_t_chinese2);  // 设置字体
-    u8g2.setFontDirection(0);       //设置屏方向
-    u8g2.clearBuffer();
-    u8g2.setCursor(18, 16);
-    u8g2.print("MPPT-controler");
-    u8g2.setCursor(40, 38);
-    u8g2.print("V1.20");
-    u8g2.setCursor(26, 60);
-    u8g2.print("thanks!");
-    u8g2.sendBuffer();
-    delay(2000);
-  }
-  //以下为进度条程序
-  if (enableLCD == 1) {
-    u8g2.firstPage();
-    int i;
-    for (i = 0; i < 25; i++) {
-      do {
-        u8g2.drawFrame(9, 25, 103, 15);
-        u8g2.drawBox(12, 27, i * 4, 11);
-        u8g2.setCursor(24, 15);
-        u8g2.print("system booting");
-      } while (u8g2.nextPage());
-    }
-  }
+  Serial.println("Initialize ADC");
 
-  mqtt_setup();
 }
 //================== CORE1: LOOP (DUAL CORE MODE) ======================//
 void loop() {
   Read_Sensors();        //TAB#2 - Sensor data measurement and computation
-  // Device_Protection();   //TAB#3 - Fault detection algorithm
-  System_Processes();    //TAB#4 - Routine system processes
-  Charging_Algorithm();  //TAB#5 - Battery Charging Algorithm
-  Onboard_Telemetry();   //TAB#6 - Onboard telemetry (USB & Serial Telemetry)
-  LCD_Menu();            //TAB#8 - Low Power Algorithm
-  Out_Mosfet();          //TAB#9 - 输出MOS控制
-  dnsserver.processNextRequest();
-  mqtt_loop();
+
 }
